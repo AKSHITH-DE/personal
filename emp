@@ -1,0 +1,50 @@
+import os
+import sys
+
+
+java_home = r"C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot"
+if os.path.exists(os.path.join(java_home, "bin", "java.exe")):
+    os.environ.setdefault("JAVA_HOME", java_home)
+
+os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
+os.environ.setdefault("PYSPARK_DRIVER_PYTHON", sys.executable)
+
+from pyspark.sql import SparkSession, Window
+from pyspark.sql.functions import dense_rank, desc
+
+
+def main() -> None:
+    spark = (
+        SparkSession.builder
+        .appName("HighestSalaryByDepartment")
+        .master("local[*]")
+        .getOrCreate()
+    )
+
+    employees = [
+        (1, "Alice", "Engineering", 95000),
+        (2, "Bob", "Engineering", 105000),
+        (3, "Carol", "HR", 75000),
+        (4, "David", "HR", 82000),
+        (5, "Eve", "Sales", 90000),
+        (6, "Frank", "Sales", 90000),
+    ]
+    columns = ["employee_id", "employee_name", "department", "salary"]
+
+    employee_df = spark.createDataFrame(employees, columns)
+
+    department_window = Window.partitionBy("department").orderBy(desc("salary"))
+    highest_salary_by_department = (
+        employee_df
+        .withColumn("salary_rank", dense_rank().over(department_window))
+        .filter("salary_rank = 1")
+        .drop("salary_rank")
+        .orderBy("department", "employee_id")
+    )
+
+    highest_salary_by_department.show()
+    spark.stop()
+
+
+if __name__ == "__main__":
+    main()
